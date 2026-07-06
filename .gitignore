@@ -1,0 +1,38 @@
+# Rust build artifacts
+**/target/
+
+# Gradle and Android build artifacts
+**/.gradle/
+**/build/
+**/local.properties
+**/.navigation/
+**/.cxx/
+**/*.apk
+**/*.aar
+
+# Android Studio / IntelliJ IDE files
+**/.idea/
+**/*.iml
+**/*.ipr
+**/*.iws
+
+# Python artifacts (just in case)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.venv/
+**/venv/
+
+# Database / Local User Data
+database/
+*.json
+*.md
+!README.md
+!.github/**/*.yml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+

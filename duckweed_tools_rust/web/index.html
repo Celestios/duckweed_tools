@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ابزارهای کشت عدسک آبی — ماشین‌حساب‌ها، شبیه‌ساز و مدیریت لاگ">
+  <meta name="theme-color" content="#1a3a2a">
+  <title>Duckweed Toolkit</title>
+  <link rel="manifest" href="/web/manifest.json">
+  <link rel="stylesheet" href="/web/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="app-shell">
+
+  <!-- ===== Sidebar ===== -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1><span class="logo-icon">🌿</span> Duckweed Toolkit</h1>
+      <p>ابزار کشت عدسک آبی</p>
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item">
+        <a href="#" data-page="planner" class="active">
+          <span class="nav-icon">🧪</span> برنامه‌ریز محلول ذخیره
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#" data-page="catalog">
+          <span class="nav-icon">📋</span> مدیریت کاتالوگ
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#" data-page="logbook">
+          <span class="nav-icon">📒</span> دفتر ثبت
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#" data-page="calculators">
+          <span class="nav-icon">🔬</span> ماشین‌حساب‌ها
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#" data-page="simulator">
+          <span class="nav-icon">🌱</span> شبیه‌ساز ظرف
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- ===== Main Content ===== -->
+  <main class="main-content">
+
+    <!-- ==================== Page: Container Stock Planner ==================== -->
+    <section class="page-section active" id="page-planner">
+      <h2 class="page-title">🧪 برنامه‌ریز محلول ذخیره</h2>
+      <p class="page-subtitle">Container-Driven Stock Solution Planner (Urea + Valagro + Iron)</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">تنظیمات</span>
+        </div>
+        <form id="plannerForm">
+          <div class="form-group">
+            <label class="form-label">نوع ظرف</label>
+            <select class="form-select" id="plannerContainer"></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">فاصله دوره‌دهی (روز)</label>
+              <input class="form-input ltr-input" type="number" id="plannerInterval" value="7" step="0.5" min="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">عمق آب (cm)</label>
+              <input class="form-input ltr-input" type="number" id="plannerDepth" value="1.5" step="0.1" min="0.1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">درصد پوشش عدسک آبی</label>
+              <input class="form-input ltr-input" type="number" id="plannerCoverage" value="0.8" step="0.05" min="0" max="1">
+              <span class="form-hint">0.0 تا 1.0 (مثلاً 0.8 = 80%)</span>
+            </div>
+            <div class="form-group" style="display:flex; flex-direction:column; justify-content:center; gap:var(--space-sm); padding-block-start:var(--space-lg);">
+              <label class="form-check">
+                <input type="checkbox" id="plannerUrea" checked> شامل اوره
+              </label>
+              <label class="form-check">
+                <input type="checkbox" id="plannerIron" checked> شامل آهن کلاته
+              </label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">محاسبه</button>
+        </form>
+      </div>
+      <div id="plannerResult"></div>
+    </section>
+
+    <!-- ==================== Page: Catalog Manager ==================== -->
+    <section class="page-section" id="page-catalog">
+      <h2 class="page-title">📋 مدیریت کاتالوگ</h2>
+      <p class="page-subtitle">Manage Container, Fertilizer & Light Source Types</p>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="cat-containers">ظروف</button>
+        <button class="tab-btn" data-tab="cat-fertilizers">کودها</button>
+        <button class="tab-btn" data-tab="cat-lights">منابع نور</button>
+      </div>
+
+      <!-- Containers Tab -->
+      <div class="tab-panel active" id="cat-containers">
+        <div class="btn-group" style="margin-block-end: var(--space-md);">
+          <button class="btn btn-primary btn-sm" onclick="App.catalog.showAddContainer()">+ افزودن ظرف</button>
+        </div>
+        <div id="containersList"></div>
+      </div>
+
+      <!-- Fertilizers Tab -->
+      <div class="tab-panel" id="cat-fertilizers">
+        <div class="btn-group" style="margin-block-end: var(--space-md);">
+          <button class="btn btn-primary btn-sm" onclick="App.catalog.showAddFertilizer()">+ افزودن کود</button>
+        </div>
+        <div id="fertilizersList"></div>
+      </div>
+
+      <!-- Lights Tab -->
+      <div class="tab-panel" id="cat-lights">
+        <div class="btn-group" style="margin-block-end: var(--space-md);">
+          <button class="btn btn-primary btn-sm" onclick="App.catalog.showAddLight()">+ افزودن منبع نور</button>
+        </div>
+        <div id="lightsList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== Page: Log Book ==================== -->
+    <section class="page-section" id="page-logbook">
+      <h2 class="page-title">📒 دفتر ثبت کشت</h2>
+      <p class="page-subtitle">Cultivation Log Book Manager</p>
+
+      <div class="btn-group" style="margin-block-end: var(--space-lg);">
+        <button class="btn btn-primary" onclick="App.logbook.showAddEntry()">+ ثبت روز جدید</button>
+        <button class="btn btn-secondary" onclick="App.logbook.exportMarkdown()">خروجی Markdown</button>
+      </div>
+      <div id="logTable"></div>
+    </section>
+
+    <!-- ==================== Page: Calculators ==================== -->
+    <section class="page-section" id="page-calculators">
+      <h2 class="page-title">🔬 ماشین‌حساب‌ها</h2>
+      <p class="page-subtitle">Dosing, EC & Stock Solution Calculators</p>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="calc-dosing">دوزینگ</button>
+        <button class="tab-btn" data-tab="calc-ec">EC / TDS</button>
+        <button class="tab-btn" data-tab="calc-stock">محلول ذخیره</button>
+      </div>
+
+      <!-- Dosing Tab -->
+      <div class="tab-panel active" id="calc-dosing">
+        <div class="card">
+          <div class="card-header"><span class="card-title">محاسبه دوز</span></div>
+          <div class="tabs" style="border:none; margin-block-end: var(--space-md);">
+            <button class="tab-btn active" data-subtab="dosing-fwd" data-group="dosing">مستقیم (گرم → ppm)</button>
+            <button class="tab-btn" data-subtab="dosing-rev" data-group="dosing">معکوس (ppm → گرم)</button>
+          </div>
+
+          <div class="tab-panel active" id="dosing-fwd">
+            <form id="dosingFwdForm">
+              <div class="form-group">
+                <label class="form-label">منبع ماده</label>
+                <select class="form-select" id="dosingFwdSource">
+                  <option value="valagro">Valagro Master 15-5-30+TE</option>
+                  <option value="urea">Urea</option>
+                  <option value="iron">Chelated Iron (Fe EDTA)</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">دوز (g/L)</label>
+                  <input class="form-input ltr-input" type="number" id="dosingFwdDose" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">حجم آب (L)</label>
+                  <input class="form-input ltr-input" type="number" id="dosingFwdVolume" value="1" step="0.1" min="0.01" required>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="dosingFwdResult"></div>
+          </div>
+
+          <div class="tab-panel" id="dosing-rev">
+            <form id="dosingRevForm">
+              <div class="form-group">
+                <label class="form-label">منبع ماده</label>
+                <select class="form-select" id="dosingRevSource">
+                  <option value="valagro">Valagro Master 15-5-30+TE</option>
+                  <option value="urea">Urea</option>
+                  <option value="iron">Chelated Iron (Fe EDTA)</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">غلظت هدف (ppm)</label>
+                  <input class="form-input ltr-input" type="number" id="dosingRevTarget" step="0.1" min="0" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">ماده مغذی</label>
+                  <input class="form-input ltr-input" type="text" id="dosingRevNutrient" value="N_total" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">حجم آب (L)</label>
+                <input class="form-input ltr-input" type="number" id="dosingRevVolume" value="1" step="0.1" min="0.01" required>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="dosingRevResult"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EC Tab -->
+      <div class="tab-panel" id="calc-ec">
+        <div class="card">
+          <div class="card-header"><span class="card-title">تخمین EC / TDS</span></div>
+          <div class="tabs" style="border:none; margin-block-end: var(--space-md);">
+            <button class="tab-btn active" data-subtab="ec-fwd" data-group="ec">مستقیم (g/L → EC)</button>
+            <button class="tab-btn" data-subtab="ec-rev" data-group="ec">معکوس (EC → g/L)</button>
+          </div>
+
+          <div class="tab-panel active" id="ec-fwd">
+            <form id="ecFwdForm">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">دوز کود (g/L)</label>
+                  <input class="form-input ltr-input" type="number" id="ecFwdDose" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مقیاس TDS</label>
+                  <select class="form-select" id="ecFwdScale">
+                    <option value="700">700 (Hanna)</option>
+                    <option value="500">500 (NaCl)</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="ecFwdResult"></div>
+          </div>
+
+          <div class="tab-panel" id="ec-rev">
+            <form id="ecRevForm">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">EC هدف (mS/cm)</label>
+                  <input class="form-input ltr-input" type="number" id="ecRevTarget" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مقیاس TDS</label>
+                  <select class="form-select" id="ecRevScale">
+                    <option value="700">700 (Hanna)</option>
+                    <option value="500">500 (NaCl)</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="ecRevResult"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Tab -->
+      <div class="tab-panel" id="calc-stock">
+        <div class="card">
+          <div class="card-header"><span class="card-title">برنامه‌ریز محلول ذخیره</span></div>
+          <div class="tabs" style="border:none; margin-block-end: var(--space-md);">
+            <button class="tab-btn active" data-subtab="stock-fwd" data-group="stock">مستقیم (دوز هدف → ذخیره)</button>
+            <button class="tab-btn" data-subtab="stock-rev" data-group="stock">معکوس (ذخیره → دوز نهایی)</button>
+          </div>
+
+          <div class="tab-panel active" id="stock-fwd">
+            <form id="stockFwdForm">
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label class="form-label">دوز نهایی (g/L)</label>
+                  <input class="form-input ltr-input" type="number" id="stockFwdDose" step="0.01" min="0.001" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">نسبت رقیق‌سازی</label>
+                  <input class="form-input ltr-input" type="number" id="stockFwdRatio" step="1" min="1" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">حجم بطری (L)</label>
+                  <input class="form-input ltr-input" type="number" id="stockFwdVol" value="1" step="0.1" min="0.01" required>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="stockFwdResult"></div>
+          </div>
+
+          <div class="tab-panel" id="stock-rev">
+            <form id="stockRevForm">
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label class="form-label">گرم کود در بطری</label>
+                  <input class="form-input ltr-input" type="number" id="stockRevGrams" step="0.01" min="0.001" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">حجم بطری (L)</label>
+                  <input class="form-input ltr-input" type="number" id="stockRevVol" value="1" step="0.1" min="0.01" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">نسبت رقیق‌سازی</label>
+                  <input class="form-input ltr-input" type="number" id="stockRevRatio" step="1" min="1" required>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">محاسبه</button>
+            </form>
+            <div id="stockRevResult"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Page: Vessel Simulator ==================== -->
+    <section class="page-section" id="page-simulator">
+      <h2 class="page-title">🌱 شبیه‌ساز ظرف کشت</h2>
+      <p class="page-subtitle">Duckweed Vessel Bio-Simulator (N, P, K, Mg, Fe)</p>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">پارامترها</span></div>
+        <form id="simulatorForm">
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="form-label">حجم مایع (L)</label>
+              <input class="form-input ltr-input" type="number" id="simVolume" value="1.0" step="0.1" min="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">عرض (cm)</label>
+              <input class="form-input ltr-input" type="number" id="simWidth" value="15.5" step="0.1" min="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">طول (cm)</label>
+              <input class="form-input ltr-input" type="number" id="simLength" value="23.0" step="0.1" min="0.1">
+            </div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="form-label">Valagro هفتگی (g)</label>
+              <input class="form-input ltr-input" type="number" id="simValagro" value="0.5" step="0.01" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">اوره هفتگی (g)</label>
+              <input class="form-input ltr-input" type="number" id="simUrea" value="0.1" step="0.01" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">آهن هفتگی (g)</label>
+              <input class="form-input ltr-input" type="number" id="simIron" value="0.07" step="0.01" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">مدت شبیه‌سازی (هفته)</label>
+              <input class="form-input ltr-input" type="number" id="simWeeks" value="6" step="1" min="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">تعویض آب هفتگی (0-1)</label>
+              <input class="form-input ltr-input" type="number" id="simExchange" value="0.3" step="0.05" min="0" max="1">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">اجرای شبیه‌سازی</button>
+        </form>
+      </div>
+      <div id="simulatorResult"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===== Modal ===== -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
