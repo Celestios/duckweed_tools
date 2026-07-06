@@ -236,7 +236,15 @@ class MainActivity : AppCompatActivity() {
                             Log.e(TAG, "Error POSTing import", e)
                             runOnUiThread {
                                 Toast.makeText(this@MainActivity, "خطا در اتصال به پایگاه داده", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } else {
+                    Toast.makeText(this, "فایل معتبر نیست (باید ساختار پشتیبان Duckweed باشد)", Toast.LENGTH_LONG).show()
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reading import file", e)
+                Toast.makeText(this, "خطا در خواندن فایل", Toast.LENGTH_SHORT).show()
             }
         } else if (requestCode == PICK_IMAGE_REQUEST) {
             try {
@@ -254,8 +262,8 @@ class MainActivity : AppCompatActivity() {
                 imagesDir.mkdirs()
 
                 val savedNames = mutableListOf<String>()
-                for (uri in uris) {
-                    val cursor = contentResolver.query(uri, null, null, null, null)
+                for (imgUri in uris) {
+                    val cursor = contentResolver.query(imgUri, null, null, null, null)
                     val name = cursor?.use {
                         if (it.moveToFirst()) {
                             it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
@@ -263,7 +271,7 @@ class MainActivity : AppCompatActivity() {
                     } ?: "image_${System.currentTimeMillis()}.jpg"
 
                     val dest = File(imagesDir, name)
-                    contentResolver.openInputStream(uri)?.use { input ->
+                    contentResolver.openInputStream(imgUri)?.use { input ->
                         FileOutputStream(dest).use { output ->
                             input.copyTo(output)
                         }
@@ -275,13 +283,11 @@ class MainActivity : AppCompatActivity() {
                 pendingImageCallback = null
 
                 if (callbackId != null) {
-                    // Single image pick for logbook — send filename back to JS callback
                     val filename = savedNames.firstOrNull() ?: ""
                     runOnUiThread {
                         webView.evaluateJavascript("window._imagePickCallback('$filename')", null)
                     }
                 } else {
-                    // Bulk import — correlate with log entries via server
                     thread {
                         try {
                             for (name in savedNames) {
@@ -312,48 +318,36 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "خطا در وارد کردن تصاویر", Toast.LENGTH_SHORT).show()
             }
         } else if (requestCode == EXPORT_IMAGES_REQUEST) {
-            try {
-                val treeUri = data.data ?: return
-                val jsonStr = pendingExportData ?: "[]"
-                val images = org.json.JSONArray(jsonStr)
+            val treeUri = data.data
+            if (treeUri != null) {
+                try {
+                    val jsonStr = pendingExportData ?: "[]"
+                    val images = org.json.JSONArray(jsonStr)
 
-                val destDir = DocumentsContract.buildDocumentUriUsingTree(
-                    treeUri,
-                    DocumentsContract.getTreeDocumentId(treeUri)
-                )
-
-                val imagesSrcDir = File(filesDir, "images")
-                for (i in 0 until images.length()) {
-                    val img = images.getJSONObject(i)
-                    val filename = img.getString("filename")
-                    val src = File(imagesSrcDir, filename)
-                    if (src.exists()) {
-                        val destUri = DocumentsContract.createDocument(
-                            contentResolver,
-                            contentResolver.getType(destDir) ?: "image/*",
-                            destDir,
-                            filename
-                        )
-                        destUri?.let {
-                            contentResolver.openOutputStream(it)?.use { out ->
-                                src.inputStream().use { inp -> inp.copyTo(out) }
+                    val imagesSrcDir = File(filesDir, "images")
+                    for (i in 0 until images.length()) {
+                        val img = images.getJSONObject(i)
+                        val filename = img.getString("filename")
+                        val src = File(imagesSrcDir, filename)
+                        if (src.exists()) {
+                            val destUri = DocumentsContract.createDocument(
+                                contentResolver,
+                                "image/*",
+                                filename
+                            )
+                            destUri?.let {
+                                contentResolver.openOutputStream(it)?.use { out ->
+                                    src.inputStream().use { inp -> inp.copyTo(out) }
+                                }
                             }
                         }
                     }
+                    pendingExportData = null
+                    Toast.makeText(this, "تصاویر با موفقیت خروجی شدند", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error exporting images", e)
+                    Toast.makeText(this, "خطا در خروجی تصاویر", Toast.LENGTH_SHORT).show()
                 }
-                pendingExportData = null
-                Toast.makeText(this, "تصاویر با موفقیت خروجی شدند", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error exporting images", e)
-                Toast.makeText(this, "خطا در خروجی تصاویر", Toast.LENGTH_SHORT).show()
-            }
-        }
-                } else {
-                    Toast.makeText(this, "فایل معتبر نیست (باید ساختار پشتیبان Duckweed باشد)", Toast.LENGTH_LONG).show()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reading import file", e)
-                Toast.makeText(this, "خطا در خواندن فایل", Toast.LENGTH_SHORT).show()
             }
         }
     }
