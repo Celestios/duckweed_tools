@@ -142,6 +142,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/log/export", axum::routing::post(api::log::export_log))
         .route("/api/db/export", axum::routing::get(api::log::export_db))
         .route("/api/db/import", axum::routing::post(api::log::import_db))
+        // API: Images
+        .route("/api/images/import", axum::routing::post(api::images::import_images))
         // State & middleware
         .with_state(shared_state)
         .layer(cors)

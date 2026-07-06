@@ -582,11 +582,15 @@ const App = {
     async showAddEntry() {
       const data = await App.api('/api/log');
       const lightTypes = Object.keys(data.light_types || {});
+      const containerTypes = Object.keys(data.container_types || {});
       const log = data.log || [];
       const nextDay = log.length > 0 ? Math.max(...log.map(e => e.day)) + 1 : 1;
 
       let lightOpts = lightTypes.map(n => `<option value="${n}">${n}</option>`).join('');
       if (lightOpts === '') lightOpts = '<option value="">— ابتدا نوعی در کاتالوگ اضافه کنید —</option>';
+
+      let contTypeOpts = containerTypes.map(n => `<option value="${n}">${n}</option>`).join('');
+      if (contTypeOpts === '') contTypeOpts = '<option value="">— ابتدا ظرفی در کاتالوگ اضافه کنید —</option>';
 
       App.modal.show(`
         <div class="modal-title">ثبت روز جدید</div>
@@ -610,6 +614,13 @@ const App = {
               <label class="form-label">دوره نوردهی (ساعت)</label>
               <input class="form-input ltr-input" type="number" id="logHours" step="0.5">
             </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>ظروف کشت</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.logbook.addContainerField()">+ افزودن ظرف</button>
+            </label>
+            <div id="logContainersContainer" style="display:flex; flex-direction:column; gap:var(--space-sm); margin-top:var(--space-xs);"></div>
           </div>
           <div class="form-group">
             <label class="form-label">عملیات (هر خط یکی)</label>
@@ -637,11 +648,26 @@ const App = {
         </form>
       `);
 
+      App._contTypeOpts = contTypeOpts;
+
       App.$('addLogForm').onsubmit = async (e) => {
         e.preventDefault();
         const lines = (id) => App.$(id).value.split('\n').map(l => l.trim()).filter(l => l);
-        
-        // Collect images from dynamic fields
+
+        // Collect containers from dynamic fields
+        const containers = {};
+        App.$('logContainersContainer').querySelectorAll('.container-entry-row').forEach(row => {
+          const cid = row.querySelector('.cont-cid').value.trim();
+          if (!cid) return;
+          containers[cid] = {
+            type: row.querySelector('.cont-type').value,
+            water_depth_cm: parseFloat(row.querySelector('.cont-depth').value) || 1.5,
+            coverage_percent: parseFloat(row.querySelector('.cont-cov').value) || 80,
+            tds_ppm: row.querySelector('.cont-tds').value ? parseInt(row.querySelector('.cont-tds').value) : null,
+            biomass_status: row.querySelector('.cont-status').value || 'healthy',
+          };
+        });
+
         const images = Array.from(App.$('logImagesContainer').children).map(row => {
           const inputs = row.querySelectorAll('input');
           return {
@@ -656,6 +682,7 @@ const App = {
             light_source: App.$('logLight').value,
             light_distance_cm: App.$('logDist').value ? parseFloat(App.$('logDist').value) : null,
             photoperiod_hours: App.$('logHours').value ? parseFloat(App.$('logHours').value) : null,
+            containers: containers,
             operations: lines('logOps'),
             observations: lines('logObs'),
             discussions: lines('logDisc'),
@@ -665,6 +692,42 @@ const App = {
           App.logbook.loadLog();
         } catch (err) { alert(err.message); }
       };
+    },
+
+    addContainerField() {
+      const container = App.$('logContainersContainer');
+      const opts = App._contTypeOpts || '';
+      const div = document.createElement('div');
+      div.className = 'container-entry-row';
+      div.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:var(--space-xs); padding:var(--space-sm); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); position:relative;';
+      div.innerHTML = `
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">نام ظرف</label>
+          <input class="form-input cont-cid" type="text" placeholder="مثلاً A1" required>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">نوع</label>
+          <select class="form-select cont-type">${opts}</select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">عمق آب (cm)</label>
+          <input class="form-input ltr-input cont-depth" type="number" value="1.5" step="0.1">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">پوشش (%)</label>
+          <input class="form-input ltr-input cont-cov" type="number" value="80" step="5" min="0" max="100">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">TDS (ppm)</label>
+          <input class="form-input ltr-input cont-tds" type="number" step="1">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:var(--font-size-xs);">وضعیت</label>
+          <input class="form-input cont-status" type="text" value="healthy">
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.container-entry-row').remove()" style="position:absolute; top:4px; left:4px; padding:2px 6px; font-size:10px;">✕</button>
+      `;
+      container.appendChild(div);
     },
 
     addImageField() {
@@ -684,8 +747,71 @@ const App = {
 
     async exportMarkdown() {
       try {
-        await App.api('/api/log/export', 'POST');
-        alert('خروجی Markdown با موفقیت ایجاد شد.');
+        const data = await App.api('/api/log');
+        const log = data.log || [];
+        if (log.length === 0) {
+          alert('هیچ ورودی برای خروجی وجود ندارد.');
+          return;
+        }
+
+        let md = '# Project BioMesh: Cultivation Log Book\n\n';
+        md += '> This log records environmental parameters, nutritional dosages, and physiological responses\n';
+        md += '> of Lemna/Wolffia colonies in home cultivation trials.\n\n';
+        md += '## Daily Cultivation Logs\n\n';
+
+        for (const entry of log) {
+          md += `### Day ${entry.day}\n\n`;
+          const light = entry.light_source || 'Unspecified';
+          const dist = entry.light_distance_cm != null ? `${entry.light_distance_cm} cm` : 'Not logged';
+          const hours = entry.photoperiod_hours != null ? `${entry.photoperiod_hours} hours` : 'Not logged';
+          md += `* **Light Source:** ${light} | **Distance:** ${dist} | **Photoperiod:** ${hours}\n\n`;
+
+          const containers = entry.containers || {};
+          if (Object.keys(containers).length > 0) {
+            md += '| Container | Type | Water Depth (cm) | Coverage (%) | TDS (ppm) | Status |\n';
+            md += '|:---:|:---:|:---:|:---:|:---:|:---:|\n';
+            for (const [cid, c] of Object.entries(containers)) {
+              md += `| **${cid}** | ${c.type || '-'} | ${c.water_depth_cm || 1.5} | ${c.coverage_percent != null ? c.coverage_percent + '%' : '-'} | ${c.tds_ppm || '-'} | ${c.biomass_status || 'healthy'} |\n`;
+            }
+            md += '\n';
+          }
+
+          if ((entry.operations || []).length > 0) {
+            md += '**Operations:**\n';
+            entry.operations.forEach(op => md += `- ${op}\n`);
+            md += '\n';
+          }
+          if ((entry.observations || []).length > 0) {
+            md += '**Observations:**\n';
+            entry.observations.forEach(o => md += `- ${o}\n`);
+            md += '\n';
+          }
+          if ((entry.discussions || []).length > 0) {
+            md += '**Discussions:**\n';
+            entry.discussions.forEach(d => md += `- ${d}\n`);
+            md += '\n';
+          }
+          if ((entry.images || []).length > 0) {
+            md += '**Images:**\n';
+            entry.images.forEach(img => md += `![${img.description || ''}](images/${img.filename})\n`);
+            md += '\n';
+          }
+          md += '---\n\n';
+        }
+
+        if (window.AndroidInterface && typeof window.AndroidInterface.exportDatabase === 'function') {
+          window.AndroidInterface.exportDatabase(md);
+        } else {
+          const blob = new Blob([md], { type: 'text/markdown' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'cultivation_log.md';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
       } catch (e) { alert(e.message); }
     },
 
@@ -740,6 +866,41 @@ const App = {
         }
       };
       reader.readAsText(file);
+      event.target.value = '';
+    },
+
+    triggerImportImages() {
+      App.$('importImagesInput').click();
+    },
+
+    async handleImportImages(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('images', file, file.name);
+      }
+
+      try {
+        const res = await fetch('/api/images/import', {
+          method: 'POST',
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+          throw new Error(err.detail || 'Upload failed');
+        }
+        const result = await res.json();
+        let msg = `${result.saved_count} تصویر ذخیره شد.`;
+        if (result.correlated_count > 0) {
+          msg += `\n${result.correlated_count} تصویر با ورودی‌های دفتر ثبت همبسته شد.`;
+        }
+        alert(msg);
+        App.logbook.loadLog();
+      } catch (err) {
+        alert('خطا در بارگذاری تصاویر: ' + err.message);
+      }
       event.target.value = '';
     },
   },

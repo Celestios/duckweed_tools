@@ -5,3 +5,4 @@ pub mod container;
 pub mod simulator;
 pub mod catalog;
 pub mod log;
+pub mod images;
