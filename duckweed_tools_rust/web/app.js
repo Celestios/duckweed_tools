@@ -560,7 +560,15 @@ const App = {
           </tr></thead><tbody>`;
         for (const entry of log) {
           const dist = entry.light_distance_cm != null ? `${entry.light_distance_cm} cm` : '—';
-          const hours = entry.photoperiod_hours != null ? `${entry.photoperiod_hours}h` : '—';
+          let hours = '—';
+          if (entry.photoperiod_start != null && entry.photoperiod_end != null) {
+            const total = entry.photoperiod_end >= entry.photoperiod_start
+              ? entry.photoperiod_end - entry.photoperiod_start
+              : (24 - entry.photoperiod_start) + entry.photoperiod_end;
+            hours = `${total}h`;
+          } else if (entry.photoperiod_hours != null) {
+            hours = `${entry.photoperiod_hours}h`;
+          }
           const containers = Object.keys(entry.containers || {}).join(', ') || '—';
           const imgs = (entry.images || []).map(img => `${img.filename} (${img.description})`).join(', ') || '—';
           const ops = (entry.operations || []).length;
@@ -611,8 +619,12 @@ const App = {
               <input class="form-input ltr-input" type="number" id="logDist" step="0.1">
             </div>
             <div class="form-group">
-              <label class="form-label">دوره نوردهی (ساعت)</label>
-              <input class="form-input ltr-input" type="number" id="logHours" step="0.5">
+              <label class="form-label">شروع نوردهی (ساعت)</label>
+              <input class="form-input ltr-input" type="number" id="logHoursStart" step="1" min="0" max="23" placeholder="مثلاً 8">
+            </div>
+            <div class="form-group">
+              <label class="form-label">پایان نوردهی (ساعت)</label>
+              <input class="form-input ltr-input" type="number" id="logHoursEnd" step="1" min="0" max="23" placeholder="مثلاً 20">
             </div>
           </div>
           <div class="form-group">
@@ -679,7 +691,8 @@ const App = {
             day: parseInt(App.$('logDay').value),
             light_source: App.$('logLight').value,
             light_distance_cm: App.$('logDist').value ? parseFloat(App.$('logDist').value) : null,
-            photoperiod_hours: App.$('logHours').value ? parseFloat(App.$('logHours').value) : null,
+            photoperiod_start: App.$('logHoursStart').value ? parseFloat(App.$('logHoursStart').value) : null,
+            photoperiod_end: App.$('logHoursEnd').value ? parseFloat(App.$('logHoursEnd').value) : null,
             containers: containers,
             operations: lines('logOps'),
             observations: lines('logObs'),
@@ -787,7 +800,15 @@ const App = {
           md += `### Day ${entry.day}\n\n`;
           const light = entry.light_source || 'Unspecified';
           const dist = entry.light_distance_cm != null ? `${entry.light_distance_cm} cm` : 'Not logged';
-          const hours = entry.photoperiod_hours != null ? `${entry.photoperiod_hours} hours` : 'Not logged';
+          let hours = 'Not logged';
+          if (entry.photoperiod_start != null && entry.photoperiod_end != null) {
+            const total = entry.photoperiod_end >= entry.photoperiod_start
+              ? entry.photoperiod_end - entry.photoperiod_start
+              : (24 - entry.photoperiod_start) + entry.photoperiod_end;
+            hours = `${entry.photoperiod_start}:00 to ${entry.photoperiod_end}:00 (${total} hours)`;
+          } else if (entry.photoperiod_hours != null) {
+            hours = `${entry.photoperiod_hours} hours`;
+          }
           md += `* **Light Source:** ${light} | **Distance:** ${dist} | **Photoperiod:** ${hours}\n\n`;
 
           const containers = entry.containers || {};
@@ -1086,8 +1107,19 @@ const App = {
           exchange_fraction: parseFloat(App.$('simExchange').value),
         });
 
+        const nutrientLabels = {
+          NO3_N: 'نیترات (N)',
+          NH4_N: 'آمونیوم (N)',
+          P: 'فسفر (P)',
+          K: 'پتاسیم (K)',
+          Mg: 'منیزیم (Mg)',
+          Fe: 'آهن (Fe)',
+        };
+
         let html = `<div class="result-panel">
-          <div class="result-title">نتایج شبیه‌سازی (${data.volume_L}L, ${data.surface_area_m2.toFixed(4)} m²)</div>
+          <div class="result-title">نتایج شبیه‌سازی</div>
+          <div class="result-row"><span class="result-key">حجم ظرف</span><span class="result-value">${data.volume_L} L</span></div>
+          <div class="result-row"><span class="result-key">سطح</span><span class="result-value">${data.surface_area_m2.toFixed(3)} m²</span></div>
         </div>`;
 
         // Build results table
@@ -1097,14 +1129,15 @@ const App = {
           );
 
           html += '<div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>هفته</th>';
-          for (const n of nutrients) html += `<th>${n}</th>`;
+          for (const n of nutrients) html += `<th>${nutrientLabels[n] || n}</th>`;
           html += '<th>وضعیت</th></tr></thead><tbody>';
 
           for (const week of data.weeks) {
             html += `<tr><td>${week.week}</td>`;
             for (const n of nutrients) {
               const val = week.concentrations[n];
-              html += `<td style="font-family:var(--font-mono)">${val != null ? val.toFixed(1) : '—'}</td>`;
+              const formatted = val != null ? (val >= 10 ? val.toFixed(1) : val.toFixed(2)) : '—';
+              html += `<td style="font-family:var(--font-mono)">${formatted}</td>`;
             }
             // Status flags
             const flags = Object.entries(week.statuses)

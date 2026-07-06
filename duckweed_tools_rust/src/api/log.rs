@@ -39,7 +39,8 @@ pub struct LogEntryRequest {
     pub day: Option<i64>,
     pub light_source: String,
     pub light_distance_cm: Option<f64>,
-    pub photoperiod_hours: Option<f64>,
+    pub photoperiod_start: Option<f64>,
+    pub photoperiod_end: Option<f64>,
     #[serde(default)]
     pub containers: HashMap<String, LogEntryContainer>,
     #[serde(default)]
@@ -126,7 +127,8 @@ pub async fn add_log_entry(
         "day": day,
         "light_source": req.light_source,
         "light_distance_cm": req.light_distance_cm,
-        "photoperiod_hours": req.photoperiod_hours,
+        "photoperiod_start": req.photoperiod_start,
+        "photoperiod_end": req.photoperiod_end,
         "containers": containers_json,
         "transfers": transfers_json,
         "operations": req.operations,

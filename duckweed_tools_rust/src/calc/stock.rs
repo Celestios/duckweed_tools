@@ -355,7 +355,7 @@ pub fn calculate_stock_for_container_schedule(
         if let Some(val) = injection_ppm.get(mapped_key) {
             if *val > max_hi {
                 warnings.push(format!(
-                    "Even with split-dosing, {} single injection concentration ({:.1} ppm) exceeds absolute maximum ({:.1} ppm)!",
+                    "حتی با تزریق تقسیمی، غلظت تک تزریق {} ({:.1} ppm) از حداکثر مطلق ({:.1} ppm) فراتر است!",
                     mapped_key, val, max_hi
                 ));
             }
@@ -366,7 +366,7 @@ pub fn calculate_stock_for_container_schedule(
         let pot_nh4 = cumulative_ppm.get("potential_NH4_N").copied().unwrap_or(0.0);
         let p_val = cumulative_ppm.get("P").copied().unwrap_or(0.0);
         warnings.push(format!(
-            "Requires split-dosing: adding the cycle dose all at once would result in potential Ammonium ({:.1} ppm) or Phosphorus ({:.1} ppm) exceeding optimal highs (90.0 ppm and 11.0 ppm respectively).",
+            "نیاز به تزریق تقسیمی: افزودن کل دوز در یک مرحله باعث افزایش آمونیوم بالقوه ({:.1} ppm) یا فسفر ({:.1} ppm) فراتر از مقادیر بهینه بالا (به ترتیب ۹۰٫۰ و ۱۱٫۰ ppm) می‌شود.",
             pot_nh4, p_val
         ));
     }

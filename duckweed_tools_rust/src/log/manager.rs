@@ -6,56 +6,63 @@ use std::path::Path;
 
 use crate::data::store::Database;
 
-/// Export the cultivation log to a markdown file.
-/// Generates the same format as the Python export_to_markdown().
+/// Export the cultivation log to a markdown file (Persian).
 pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> {
     let log = &db.log;
     if log.is_empty() {
-        return Err("No data to export.".to_string());
+        return Err("داده‌ای برای خروجی وجود ندارد.".to_string());
     }
 
     let mut md = Vec::new();
-    md.push("# Project BioMesh: Cultivation Log Book\n".to_string());
+    md.push("# پروژه BioMesh: دفترچه گزارش کشت\n".to_string());
     md.push("> [!NOTE]".to_string());
-    md.push("> This log records environmental parameters, nutritional dosages, and physiological responses".to_string());
-    md.push("> of Lemna/Wolffia colonies in home cultivation trials. It is automatically rendered from the singular database.\n".to_string());
-    md.push("## Daily Cultivation Logs\n".to_string());
+    md.push("> این گزارش پارامترهای محیطی، دوزهای تغذیه‌ای و پاسخ‌های فیزیولوژیکی".to_string());
+    md.push("> کلونی‌های Lemna/Wolffia در آزمایش‌های کشت خانگی را ثبت می‌کند. به طور خودکار از پایگاه داده واحد تولید شده است.\n".to_string());
+    md.push("## گزارش‌های روزانه کشت\n".to_string());
 
     for entry in log {
         let day = entry.get("day").and_then(|v| v.as_i64()).unwrap_or(0);
-        md.push(format!("### Day {}", day));
+        md.push(format!("### روز {}", day));
 
         // Environmental header
         let l_type = entry
             .get("light_source")
             .and_then(|v| v.as_str())
-            .unwrap_or("Unspecified");
+            .unwrap_or("نامشخص");
         let dist = entry
             .get("light_distance_cm")
             .and_then(|v| v.as_f64())
-            .map(|v| format!("{} cm", v))
-            .unwrap_or_else(|| "Not logged".to_string());
-        let hours = entry
-            .get("photoperiod_hours")
-            .and_then(|v| v.as_f64())
-            .map(|v| format!("{} hours", v))
-            .unwrap_or_else(|| "Not logged".to_string());
+            .map(|v| format!("{} سانتیمتر", v))
+            .unwrap_or_else(|| "ثبت نشده".to_string());
+        let hours_str = match (
+            entry.get("photoperiod_start").and_then(|v| v.as_f64()),
+            entry.get("photoperiod_end").and_then(|v| v.as_f64()),
+        ) {
+            (Some(start), Some(end)) => {
+                let total = if end >= start { end - start } else { (24.0 - start) + end };
+                format!("{}:00 تا {}:00 ({} ساعت)", start, end, total)
+            }
+            _ => match entry.get("photoperiod_hours").and_then(|v| v.as_f64()) {
+                Some(h) => format!("{} ساعت", h),
+                None => "ثبت نشده".to_string(),
+            },
+        };
         md.push(format!(
-            "* **Light Source:** {} | **Distance:** {} | **Photoperiod:** {}\n",
-            l_type, dist, hours
+            "* **منبع نور:** {} | **فاصله:** {} | **دوره نوری:** {}\n",
+            l_type, dist, hours_str
         ));
 
         // Container table
         if let Some(containers) = entry.get("containers").and_then(|v| v.as_object()) {
             if !containers.is_empty() {
-                md.push("| Container | Type Template | Water Depth (cm) | Calculated Volume (L) | Coverage (%) | TDS (ppm) | Biomass Status | Additives |".to_string());
+                md.push("| ظرف | قالب نوع | عمق آب (سانتیمتر) | حجم محاسبه‌شده (لیتر) | پوشش (%) | TDS (ppm) | وضعیت بیوماس | افزودنی‌ها |".to_string());
                 md.push("|:---:|:---:|:----------:|:----------------:|:------------:|:---------:|:--------------|:----------|".to_string());
 
                 for (cid, cdata) in containers {
                     let c_type = cdata
                         .get("type")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("Standard Tray");
+                        .unwrap_or("سینی استاندارد");
                     let w_dp = cdata
                         .get("water_depth_cm")
                         .and_then(|v| v.as_f64())
@@ -73,7 +80,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
                     let status = cdata
                         .get("biomass_status")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("healthy");
+                        .unwrap_or("سالم");
 
                     // Dynamic volume calculation
                     let dims = db
@@ -83,11 +90,12 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
                     let length = dims.map(|d| d.length_cm).unwrap_or(23.0);
                     let vol_l = (width * length * w_dp) / 1000.0;
 
-                    // Warning highlights
+                    // Warning highlights (English + Persian keywords)
                     let status_str = {
                         let lower = status.to_lowercase();
                         let warn_words = [
                             "death", "crash", "chlorosis", "yellow", "lethal", "sinking", "stress",
+                            "مرگ", "سقوط", "زردشدگی", "زرد", "کشنده", "غرق", "تنش",
                         ];
                         if warn_words.iter().any(|w| lower.contains(w)) {
                             format!("⚠️ {}", status)
@@ -101,7 +109,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
                         .and_then(|v| v.as_array())
                         .map(|arr| {
                             if arr.is_empty() {
-                                "None".to_string()
+                                "بدون".to_string()
                             } else {
                                 arr.iter()
                                     .map(|a| {
@@ -115,7 +123,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
                                     .join(", ")
                             }
                         })
-                        .unwrap_or_else(|| "None".to_string());
+                        .unwrap_or_else(|| "بدون".to_string());
 
                     md.push(format!(
                         "| **{}** | {} | {} | {:.3} | {} | {} | {} | {} |",
@@ -129,13 +137,13 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
         // Transfers
         if let Some(transfers) = entry.get("transfers").and_then(|v| v.as_array()) {
             if !transfers.is_empty() {
-                md.push("**Biomass Transfers:**".to_string());
+                md.push("**انتقال بیوماس:**".to_string());
                 for t in transfers {
                     let amount = t.get("amount").and_then(|v| v.as_str()).unwrap_or("");
                     let from = t.get("from").and_then(|v| v.as_str()).unwrap_or("");
                     let to = t.get("to").and_then(|v| v.as_str()).unwrap_or("");
                     md.push(format!(
-                        "- Transferred {} from **{}** to **{}**",
+                        "- {} از **{}** به **{}** انتقال یافت",
                         amount, from, to
                     ));
                 }
@@ -146,7 +154,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
         // Operations
         if let Some(ops) = entry.get("operations").and_then(|v| v.as_array()) {
             if !ops.is_empty() {
-                md.push("**Operations Performed:**".to_string());
+                md.push("**عملیات انجام‌شده:**".to_string());
                 for op in ops {
                     if let Some(s) = op.as_str() {
                         md.push(format!("- {}", s));
@@ -159,12 +167,14 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
         // Observations
         if let Some(obs) = entry.get("observations").and_then(|v| v.as_array()) {
             if !obs.is_empty() {
-                md.push("**Observations & Notes:**".to_string());
+                md.push("**مشاهدات و یادداشت‌ها:**".to_string());
                 for o in obs {
                     if let Some(s) = o.as_str() {
                         let lower = s.to_lowercase();
-                        let warn_words =
-                            ["death", "crash", "chlorosis", "yellow", "lethal", "die"];
+                        let warn_words = [
+                            "death", "crash", "chlorosis", "yellow", "lethal", "die",
+                            "مرگ", "سقوط", "زردشدگی", "زرد", "کشنده",
+                        ];
                         if warn_words.iter().any(|w| lower.contains(w)) {
                             md.push(format!("- ⚠️ {}", s));
                         } else {
@@ -179,7 +189,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
         // Discussions
         if let Some(discs) = entry.get("discussions").and_then(|v| v.as_array()) {
             if !discs.is_empty() {
-                md.push("**Discussions & Troubleshooting:**".to_string());
+                md.push("**بحث‌ها و عیب‌یابی:**".to_string());
                 for d in discs {
                     if let Some(s) = d.as_str() {
                         md.push(format!("- {}", s));
@@ -192,7 +202,7 @@ pub fn export_to_markdown(db: &Database, data_dir: &Path) -> Result<(), String> 
         // Images
         if let Some(images) = entry.get("images").and_then(|v| v.as_array()) {
             if !images.is_empty() {
-                md.push("**Logged Images:**".to_string());
+                md.push("**تصاویر ثبت‌شده:**".to_string());
                 for img in images {
                     let filename = img
                         .get("filename")
