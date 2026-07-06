@@ -210,6 +210,10 @@ body {
   background: var(--bg-card-hover);
 }
 
+.menu-toggle.menu-open {
+  display: none !important;
+}
+
 .sidebar-overlay {
   display: none;
   position: fixed;

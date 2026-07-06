@@ -53,6 +53,12 @@ const App = {
   // Navigation
   // ---------------------------------------------------------------------------
   initNav() {
+    const setMenuState = (open) => {
+      App.$('sidebar').classList.toggle('open', open);
+      App.$('sidebarOverlay').classList.toggle('active', open);
+      App.$('menuToggle').classList.toggle('menu-open', open);
+    };
+
     document.querySelectorAll('.nav-item a').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -67,8 +73,7 @@ const App = {
         App.$(`page-${page}`).classList.add('active');
 
         // Close mobile menu
-        App.$('sidebar').classList.remove('open');
-        App.$('sidebarOverlay').classList.remove('active');
+        setMenuState(false);
 
         // Load data for the page
         if (page === 'planner') App.planner.loadContainers();
@@ -79,12 +84,11 @@ const App = {
 
     // Mobile menu toggle
     App.$('menuToggle').addEventListener('click', () => {
-      App.$('sidebar').classList.toggle('open');
-      App.$('sidebarOverlay').classList.toggle('active');
+      const open = !App.$('sidebar').classList.contains('open');
+      setMenuState(open);
     });
     App.$('sidebarOverlay').addEventListener('click', () => {
-      App.$('sidebar').classList.remove('open');
-      App.$('sidebarOverlay').classList.remove('active');
+      setMenuState(false);
     });
   },
 
@@ -552,12 +556,13 @@ const App = {
 
         let html = `<table class="data-table">
           <thead><tr>
-            <th>روز</th><th>منبع نور</th><th>فاصله</th><th>ساعت</th><th>ظروف</th><th>عملیات</th>
+            <th>روز</th><th>منبع نور</th><th>فاصله</th><th>ساعت</th><th>ظروف</th><th>تصاویر</th><th>عملیات</th>
           </tr></thead><tbody>`;
         for (const entry of log) {
           const dist = entry.light_distance_cm != null ? `${entry.light_distance_cm} cm` : '—';
           const hours = entry.photoperiod_hours != null ? `${entry.photoperiod_hours}h` : '—';
           const containers = Object.keys(entry.containers || {}).join(', ') || '—';
+          const imgs = (entry.images || []).map(img => `${img.filename} (${img.description})`).join(', ') || '—';
           const ops = (entry.operations || []).length;
           html += `<tr>
             <td>${entry.day}</td>
@@ -565,6 +570,7 @@ const App = {
             <td>${dist}</td>
             <td>${hours}</td>
             <td>${containers}</td>
+            <td>${imgs}</td>
             <td>${ops}</td>
           </tr>`;
         }
@@ -617,6 +623,13 @@ const App = {
             <label class="form-label">بحث‌ها (هر خط یکی)</label>
             <textarea class="form-textarea" id="logDisc" placeholder="هر بحث در یک خط ..."></textarea>
           </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>تصاویر روز</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.logbook.addImageField()">+ افزودن تصویر</button>
+            </label>
+            <div id="logImagesContainer" style="display:flex; flex-direction:column; gap:var(--space-xs); margin-top:var(--space-xs);"></div>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn btn-secondary" onclick="App.modal.hide()">انصراف</button>
             <button type="submit" class="btn btn-primary">ذخیره</button>
@@ -627,6 +640,16 @@ const App = {
       App.$('addLogForm').onsubmit = async (e) => {
         e.preventDefault();
         const lines = (id) => App.$(id).value.split('\n').map(l => l.trim()).filter(l => l);
+        
+        // Collect images from dynamic fields
+        const images = Array.from(App.$('logImagesContainer').children).map(row => {
+          const inputs = row.querySelectorAll('input');
+          return {
+            filename: inputs[0].value.trim(),
+            description: inputs[1].value.trim()
+          };
+        });
+
         try {
           await App.api('/api/log', 'POST', {
             day: parseInt(App.$('logDay').value),
@@ -636,6 +659,7 @@ const App = {
             operations: lines('logOps'),
             observations: lines('logObs'),
             discussions: lines('logDisc'),
+            images: images,
           });
           App.modal.hide();
           App.logbook.loadLog();
@@ -643,11 +667,80 @@ const App = {
       };
     },
 
+    addImageField() {
+      const container = App.$('logImagesContainer');
+      const div = document.createElement('div');
+      div.className = 'form-row';
+      div.style.marginBottom = 'var(--space-xs)';
+      div.style.gap = 'var(--space-xs)';
+      div.style.alignItems = 'center';
+      div.innerHTML = `
+        <input class="form-input ltr-input" type="text" placeholder="نام فایل (مثلا img1.jpg)" style="flex:2;" required>
+        <input class="form-input" type="text" placeholder="توضیح تصویر" style="flex:3;" required>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding:var(--space-xs) var(--space-sm); margin:0;">✕</button>
+      `;
+      container.appendChild(div);
+    },
+
     async exportMarkdown() {
       try {
         await App.api('/api/log/export', 'POST');
         alert('خروجی Markdown با موفقیت ایجاد شد.');
       } catch (e) { alert(e.message); }
+    },
+
+    async exportJSON() {
+      try {
+        const data = await App.api('/api/db/export');
+        const str = JSON.stringify(data, null, 2);
+        
+        if (window.AndroidInterface && typeof window.AndroidInterface.exportDatabase === 'function') {
+          window.AndroidInterface.exportDatabase(str);
+        } else {
+          // Standard browser download
+          const blob = new Blob([str], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'duckweed_database.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      } catch (e) { alert(e.message); }
+    },
+
+    triggerImportJSON() {
+      if (window.AndroidInterface && typeof window.AndroidInterface.importDatabase === 'function') {
+        window.AndroidInterface.importDatabase();
+      } else {
+        App.$('importJsonInput').click();
+      }
+    },
+
+    async handleImportJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          
+          if (!json.container_types || !json.log) {
+            throw new Error('فایل انتخاب شده ساختار پایگاه داده معتبر Duckweed را ندارد.');
+          }
+          
+          await App.api('/api/db/import', 'POST', json);
+          alert('پایگاه داده با موفقیت بازیابی شد.');
+          window.location.reload();
+        } catch (err) {
+          alert('خطا در بارگذاری فایل: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
     },
   },
 

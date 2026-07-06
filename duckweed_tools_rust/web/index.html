@@ -51,6 +51,11 @@
           <span class="nav-icon">🌱</span> شبیه‌ساز ظرف
         </a>
       </li>
+      <li class="nav-item">
+        <a href="#" data-page="data">
+          <span class="nav-icon">💾</span> داده‌ها
+        </a>
+      </li>
     </ul>
   </nav>
 
@@ -145,7 +150,6 @@
 
       <div class="btn-group" style="margin-block-end: var(--space-lg);">
         <button class="btn btn-primary" onclick="App.logbook.showAddEntry()">+ ثبت روز جدید</button>
-        <button class="btn btn-secondary" onclick="App.logbook.exportMarkdown()">خروجی Markdown</button>
       </div>
       <div id="logTable"></div>
     </section>
@@ -381,6 +385,29 @@
         </form>
       </div>
       <div id="simulatorResult"></div>
+    </section>
+
+    <!-- ==================== Page: Data Management ==================== -->
+    <section class="page-section" id="page-data">
+      <h2 class="page-title">💾 مدیریت داده‌ها</h2>
+      <p class="page-subtitle">Export/Import JSON Backups & Markdown Cultivation Logs</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">عملیات فایل‌ها</span>
+        </div>
+        <div class="card-body" style="padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-md);">
+          <p style="margin-block-end: var(--space-md); color: var(--text-secondary); line-height: 1.6;">
+            از این بخش می‌توانید نسخه پشتیبان کامل سیستم را در قالب فایل JSON دریافت و یا بازیابی کنید. همچنین امکان دریافت نسخه قابل چاپ گزارش به صورت Markdown فراهم است.
+          </p>
+          <div class="btn-group" style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="App.logbook.exportJSON()">📥 خروجی پشتیبان (JSON)</button>
+            <button class="btn btn-secondary" onclick="App.logbook.triggerImportJSON()">📤 بازیابی پشتیبان (JSON)</button>
+            <button class="btn btn-secondary" onclick="App.logbook.exportMarkdown()">📝 گزارش کشت (Markdown)</button>
+          </div>
+          <input type="file" id="importJsonInput" accept=".json" style="display: none;" onchange="App.logbook.handleImportJSON(event)">
+        </div>
+      </div>
     </section>
 
   </main>

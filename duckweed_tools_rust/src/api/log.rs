@@ -8,7 +8,7 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::data::store::AppState;
+use crate::data::store::{AppState, Database};
 use crate::log::manager::export_to_markdown;
 use crate::server::AppError;
 
@@ -160,4 +160,33 @@ pub async fn export_log(
     let db = state.db.lock().unwrap();
     export_to_markdown(&db, &state.data_dir).map_err(AppError::internal)?;
     Ok(Json(json!({"status": "exported"})))
+}
+
+pub async fn export_db(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let db = state.db.lock().unwrap();
+    let val = serde_json::to_value(&*db).map_err(|e| AppError::internal(e.to_string()))?;
+    Ok(Json(val))
+}
+
+pub async fn import_db(
+    State(state): State<Arc<AppState>>,
+    Json(val): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let new_db: Database = serde_json::from_value(val).map_err(|e| {
+        AppError::bad_request(format!("Invalid database format: {}", e))
+    })?;
+
+    let mut db = state.db.lock().unwrap();
+    *db = new_db;
+
+    let data_dir = state.data_dir.clone();
+    drop(db);
+    state.save().map_err(AppError::internal)?;
+
+    let db = state.db.lock().unwrap();
+    let _ = export_to_markdown(&db, &data_dir);
+
+    Ok(Json(json!({"status": "imported"})))
 }

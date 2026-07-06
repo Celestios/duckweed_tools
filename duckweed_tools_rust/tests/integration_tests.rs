@@ -211,3 +211,70 @@ async fn test_log_endpoints() {
         .unwrap();
     assert_eq!(response2.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_db_export_import() {
+    let (app, _dir) = setup_test_app();
+
+    // 1. Export database
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/db/export")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let db_val: Value = serde_json::from_slice(&body).unwrap();
+    
+    // Verify it contains the default struct elements
+    assert!(db_val.get("container_types").is_some());
+    assert!(db_val.get("log").is_some());
+
+    // 2. Import database (with an added container type)
+    let mut db_to_import = db_val.clone();
+    db_to_import["container_types"]["New Imported Tub"] = json!({
+        "width_cm": 20.0,
+        "length_cm": 30.0,
+        "height_cm": 10.0
+    });
+
+    let response2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/db/import")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&db_to_import).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response2.status(), StatusCode::OK);
+
+    // 3. Verify it was loaded successfully
+    let response3 = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/db/export")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response3.status(), StatusCode::OK);
+    let body3 = response3.into_body().collect().await.unwrap().to_bytes();
+    let db_val3: Value = serde_json::from_slice(&body3).unwrap();
+    assert!(db_val3["container_types"].get("New Imported Tub").is_some());
+}
+
