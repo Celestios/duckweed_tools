@@ -332,6 +332,7 @@ class MainActivity : AppCompatActivity() {
                         if (src.exists()) {
                             val destUri = DocumentsContract.createDocument(
                                 contentResolver,
+                                treeUri,
                                 "image/*",
                                 filename
                             )
