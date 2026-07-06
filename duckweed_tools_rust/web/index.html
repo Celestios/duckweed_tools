@@ -405,6 +405,7 @@
             <button class="btn btn-secondary" onclick="App.logbook.triggerImportJSON()">📤 بازیابی پشتیبان (JSON)</button>
             <button class="btn btn-secondary" onclick="App.logbook.exportMarkdown()">📝 گزارش کشت (Markdown)</button>
             <button class="btn btn-secondary" onclick="App.logbook.triggerImportImages()">🖼️ وارد کردن تصاویر</button>
+            <button class="btn btn-secondary" onclick="App.logbook.exportImages()">📤 خروجی تصاویر</button>
           </div>
           <input type="file" id="importJsonInput" accept=".json" style="display: none;" onchange="App.logbook.handleImportJSON(event)">
           <input type="file" id="importImagesInput" accept="image/*" multiple style="display: none;" onchange="App.logbook.handleImportImages(event)">

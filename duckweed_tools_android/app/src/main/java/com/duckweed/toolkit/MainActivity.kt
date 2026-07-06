@@ -3,6 +3,7 @@ package com.duckweed.toolkit
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
@@ -27,7 +28,12 @@ class MainActivity : AppCompatActivity() {
 
     private val CREATE_FILE_REQUEST = 1001
     private val PICK_FILE_REQUEST = 1002
-    private var pendingExportJson: String? = null
+    private val PICK_IMAGE_REQUEST = 1003
+    private val EXPORT_IMAGES_REQUEST = 1004
+    private var pendingExportData: String? = null
+    private var pendingExportMimeType: String? = null
+    private var pendingExportFilename: String? = null
+    private var pendingImageCallback: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,12 +163,14 @@ class MainActivity : AppCompatActivity() {
         serverProcess = null
     }
 
-    private fun triggerAndroidExport(jsonStr: String) {
-        pendingExportJson = jsonStr
+    private fun triggerAndroidExport(data: String, mimeType: String, filename: String) {
+        pendingExportData = data
+        pendingExportMimeType = mimeType
+        pendingExportFilename = filename
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-            putExtra(Intent.EXTRA_TITLE, "duckweed_database.json")
+            type = mimeType
+            putExtra(Intent.EXTRA_TITLE, filename)
         }
         startActivityForResult(intent, CREATE_FILE_REQUEST)
     }
@@ -183,12 +191,14 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == CREATE_FILE_REQUEST) {
             try {
-                val json = pendingExportJson ?: ""
+                val data = pendingExportData ?: ""
                 contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(json.toByteArray())
+                    outputStream.write(data.toByteArray())
                 }
-                pendingExportJson = null
-                Toast.makeText(this, "پشتیبان‌گیری با موفقیت انجام شد", Toast.LENGTH_SHORT).show()
+                pendingExportData = null
+                pendingExportMimeType = null
+                pendingExportFilename = null
+                Toast.makeText(this, "خروجی با موفقیت ایجاد شد", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e(TAG, "Error writing exported file", e)
                 Toast.makeText(this, "خطا در پشتیبان‌گیری", Toast.LENGTH_SHORT).show()
@@ -226,9 +236,118 @@ class MainActivity : AppCompatActivity() {
                             Log.e(TAG, "Error POSTing import", e)
                             runOnUiThread {
                                 Toast.makeText(this@MainActivity, "خطا در اتصال به پایگاه داده", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else if (requestCode == PICK_IMAGE_REQUEST) {
+            try {
+                val clipData = data.clipData
+                val uris = mutableListOf<android.net.Uri>()
+                if (clipData != null) {
+                    for (i in 0 until clipData.itemCount) {
+                        uris.add(clipData.getItemAt(i).uri)
+                    }
+                } else {
+                    data.data?.let { uris.add(it) }
+                }
+
+                val imagesDir = File(filesDir, "images")
+                imagesDir.mkdirs()
+
+                val savedNames = mutableListOf<String>()
+                for (uri in uris) {
+                    val cursor = contentResolver.query(uri, null, null, null, null)
+                    val name = cursor?.use {
+                        if (it.moveToFirst()) {
+                            it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
+                        } else "image_${System.currentTimeMillis()}.jpg"
+                    } ?: "image_${System.currentTimeMillis()}.jpg"
+
+                    val dest = File(imagesDir, name)
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(dest).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    savedNames.add(name)
+                }
+
+                val callbackId = pendingImageCallback
+                pendingImageCallback = null
+
+                if (callbackId != null) {
+                    // Single image pick for logbook — send filename back to JS callback
+                    val filename = savedNames.firstOrNull() ?: ""
+                    runOnUiThread {
+                        webView.evaluateJavascript("window._imagePickCallback('$filename')", null)
+                    }
+                } else {
+                    // Bulk import — correlate with log entries via server
+                    thread {
+                        try {
+                            for (name in savedNames) {
+                                val url = URL("http://127.0.0.1:$serverPort/api/images/correlate")
+                                val conn = url.openConnection() as HttpURLConnection
+                                conn.requestMethod = "POST"
+                                conn.setRequestProperty("Content-Type", "application/json")
+                                conn.doOutput = true
+                                conn.outputStream.use { out ->
+                                    out.write("""{"filename":"$name"}""".toByteArray())
+                                }
+                                conn.responseCode
+                            }
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${savedNames.size} تصویر وارد شد", Toast.LENGTH_SHORT).show()
+                                webView.reload()
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error correlating images", e)
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "تصاویر ذخیره شدند اما همبسته‌سازی ناموفق بود", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error importing images", e)
+                Toast.makeText(this, "خطا در وارد کردن تصاویر", Toast.LENGTH_SHORT).show()
+            }
+        } else if (requestCode == EXPORT_IMAGES_REQUEST) {
+            try {
+                val treeUri = data.data ?: return
+                val jsonStr = pendingExportData ?: "[]"
+                val images = org.json.JSONArray(jsonStr)
+
+                val destDir = DocumentsContract.buildDocumentUriUsingTree(
+                    treeUri,
+                    DocumentsContract.getTreeDocumentId(treeUri)
+                )
+
+                val imagesSrcDir = File(filesDir, "images")
+                for (i in 0 until images.length()) {
+                    val img = images.getJSONObject(i)
+                    val filename = img.getString("filename")
+                    val src = File(imagesSrcDir, filename)
+                    if (src.exists()) {
+                        val destUri = DocumentsContract.createDocument(
+                            contentResolver,
+                            contentResolver.getType(destDir) ?: "image/*",
+                            destDir,
+                            filename
+                        )
+                        destUri?.let {
+                            contentResolver.openOutputStream(it)?.use { out ->
+                                src.inputStream().use { inp -> inp.copyTo(out) }
+                            }
+                        }
+                    }
+                }
+                pendingExportData = null
+                Toast.makeText(this, "تصاویر با موفقیت خروجی شدند", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error exporting images", e)
+                Toast.makeText(this, "خطا در خروجی تصاویر", Toast.LENGTH_SHORT).show()
+            }
+        }
                 } else {
                     Toast.makeText(this, "فایل معتبر نیست (باید ساختار پشتیبان Duckweed باشد)", Toast.LENGTH_LONG).show()
                 }
@@ -243,8 +362,45 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun exportDatabase(jsonStr: String) {
             runOnUiThread {
-                triggerAndroidExport(jsonStr)
+                triggerAndroidExport(jsonStr, "application/json", "duckweed_database.json")
             }
+        }
+
+        @JavascriptInterface
+        fun exportMarkdown(mdStr: String) {
+            runOnUiThread {
+                triggerAndroidExport(mdStr, "text/markdown", "cultivation_log.md")
+            }
+        }
+
+        @JavascriptInterface
+        fun exportImages(jsonStr: String) {
+            pendingExportData = jsonStr
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            startActivityForResult(intent, EXPORT_IMAGES_REQUEST)
+        }
+
+        @JavascriptInterface
+        fun importImages() {
+            pendingImageCallback = null
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
+            startActivityForResult(intent, PICK_IMAGE_REQUEST)
+        }
+
+        @JavascriptInterface
+        fun pickImageForLog(callbackId: String) {
+            pendingImageCallback = callbackId
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+            }
+            startActivityForResult(intent, PICK_IMAGE_REQUEST)
         }
 
         @JavascriptInterface

@@ -1,9 +1,12 @@
 //! POST /api/images/import — upload images and correlate with log entries
+//! POST /api/images/correlate — correlate an existing image file with a log entry
+//! GET /api/images — list saved images
 
 use std::sync::Arc;
 
 use axum::extract::{Multipart, State};
 use axum::Json;
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::data::store::AppState;
@@ -107,4 +110,75 @@ fn extract_day_number(stem: &str) -> Option<i64> {
         return Some(n);
     }
     None
+}
+
+#[derive(Deserialize)]
+pub struct CorrelateRequest {
+    pub filename: String,
+}
+
+/// Correlate an already-saved image file with a log entry by filename pattern.
+pub async fn correlate_image(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CorrelateRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let stem = std::path::Path::new(&req.filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+
+    let day_num = extract_day_number(stem);
+
+    if let Some(day) = day_num {
+        let mut db = state.db.lock().unwrap();
+        for entry in &mut db.log {
+            if entry.get("day").and_then(|v| v.as_i64()) == Some(day) {
+                if entry.get("images").and_then(|v| v.as_array()).is_none() {
+                    entry["images"] = json!([]);
+                }
+                let images = entry["images"].as_array_mut().unwrap();
+                let already = images.iter().any(|img| {
+                    img.get("filename").and_then(|v| v.as_str()) == Some(&req.filename)
+                });
+                if !already {
+                    images.push(json!({
+                        "filename": req.filename,
+                        "description": stem,
+                    }));
+                }
+                drop(db);
+                let _ = state.save();
+                return Ok(Json(json!({"status": "correlated", "day": day})));
+            }
+        }
+    }
+
+    Ok(Json(json!({"status": "saved", "correlated": false})))
+}
+
+/// List all images in the images directory.
+pub async fn list_images(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let images_dir = state.data_dir.join("images");
+    if !images_dir.exists() {
+        return Ok(Json(json!({"images": []})));
+    }
+
+    let mut images = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&images_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                images.push(json!({
+                    "filename": name,
+                    "size": size,
+                }));
+            }
+        }
+    }
+
+    Ok(Json(json!({"images": images})))
 }

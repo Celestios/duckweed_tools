@@ -669,12 +669,10 @@ const App = {
         });
 
         const images = Array.from(App.$('logImagesContainer').children).map(row => {
-          const inputs = row.querySelectorAll('input');
-          return {
-            filename: inputs[0].value.trim(),
-            description: inputs[1].value.trim()
-          };
-        });
+          const filename = row.querySelector('.img-filename')?.value?.trim() || '';
+          const description = row.querySelector('.img-desc')?.value?.trim() || '';
+          return { filename, description };
+        }).filter(img => img.filename);
 
         try {
           await App.api('/api/log', 'POST', {
@@ -732,17 +730,43 @@ const App = {
 
     addImageField() {
       const container = App.$('logImagesContainer');
+      const rowId = 'imgRow_' + Date.now();
       const div = document.createElement('div');
+      div.id = rowId;
       div.className = 'form-row';
       div.style.marginBottom = 'var(--space-xs)';
       div.style.gap = 'var(--space-xs)';
       div.style.alignItems = 'center';
-      div.innerHTML = `
-        <input class="form-input ltr-input" type="text" placeholder="نام فایل (مثلا img1.jpg)" style="flex:2;" required>
-        <input class="form-input" type="text" placeholder="توضیح تصویر" style="flex:3;" required>
-        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding:var(--space-xs) var(--space-sm); margin:0;">✕</button>
-      `;
+
+      if (window.AndroidInterface && typeof window.AndroidInterface.pickImageForLog === 'function') {
+        div.innerHTML = `
+          <input class="form-input ltr-input img-filename" type="text" placeholder="نام فایل" style="flex:2;" readonly>
+          <input class="form-input img-desc" type="text" placeholder="توضیح تصویر" style="flex:3;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.logbook.pickImage('${rowId}')" style="padding:var(--space-xs) var(--space-sm); margin:0;">انتخاب</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.form-row').remove()" style="padding:var(--space-xs) var(--space-sm); margin:0;">✕</button>
+        `;
+      } else {
+        div.innerHTML = `
+          <input class="form-input ltr-input img-filename" type="text" placeholder="نام فایل (مثلا img1.jpg)" style="flex:2;" required>
+          <input class="form-input img-desc" type="text" placeholder="توضیح تصویر" style="flex:3;" required>
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.form-row').remove()" style="padding:var(--space-xs) var(--space-sm); margin:0;">✕</button>
+        `;
+      }
       container.appendChild(div);
+    },
+
+    pickImage(rowId) {
+      window._imagePickCallback = function(filename) {
+        const row = document.getElementById(rowId);
+        if (row) {
+          const filenameInput = row.querySelector('.img-filename');
+          if (filenameInput) filenameInput.value = filename;
+          const descInput = row.querySelector('.img-desc');
+          if (descInput && !descInput.value) descInput.value = filename.replace(/\.[^.]+$/, '');
+        }
+        window._imagePickCallback = null;
+      };
+      window.AndroidInterface.pickImageForLog(rowId);
     },
 
     async exportMarkdown() {
@@ -799,7 +823,9 @@ const App = {
           md += '---\n\n';
         }
 
-        if (window.AndroidInterface && typeof window.AndroidInterface.exportDatabase === 'function') {
+        if (window.AndroidInterface && typeof window.AndroidInterface.exportMarkdown === 'function') {
+          window.AndroidInterface.exportMarkdown(md);
+        } else if (window.AndroidInterface && typeof window.AndroidInterface.exportDatabase === 'function') {
           window.AndroidInterface.exportDatabase(md);
         } else {
           const blob = new Blob([md], { type: 'text/markdown' });
@@ -870,7 +896,34 @@ const App = {
     },
 
     triggerImportImages() {
-      App.$('importImagesInput').click();
+      if (window.AndroidInterface && typeof window.AndroidInterface.importImages === 'function') {
+        window.AndroidInterface.importImages();
+      } else {
+        App.$('importImagesInput').click();
+      }
+    },
+
+    async exportImages() {
+      try {
+        const data = await App.api('/api/images');
+        const images = data.images || [];
+        if (images.length === 0) {
+          alert('هیچ تصویری برای خروجی وجود ندارد.');
+          return;
+        }
+
+        if (window.AndroidInterface && typeof window.AndroidInterface.exportImages === 'function') {
+          window.AndroidInterface.exportImages(JSON.stringify(images));
+        } else {
+          // Browser fallback: download each image
+          for (const img of images) {
+            const a = document.createElement('a');
+            a.href = `/api/images/file/${encodeURIComponent(img.filename)}`;
+            a.download = img.filename;
+            a.click();
+          }
+        }
+      } catch (e) { alert(e.message); }
     },
 
     async handleImportImages(event) {

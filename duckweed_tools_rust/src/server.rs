@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    extract::Path,
+    extract::{Path, State},
     http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
@@ -93,6 +93,22 @@ async fn serve_static(Path(path): Path<String>) -> impl IntoResponse {
     }
 }
 
+async fn serve_image(
+    Path(filename): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let path = state.data_dir.join("images").join(&filename);
+    match std::fs::read(&path) {
+        Ok(data) => {
+            let mime = mime_guess::from_path(&path)
+                .first_or_octet_stream()
+                .to_string();
+            ([(header::CONTENT_TYPE, mime)], data).into_response()
+        }
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -143,7 +159,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/db/export", axum::routing::get(api::log::export_db))
         .route("/api/db/import", axum::routing::post(api::log::import_db))
         // API: Images
+        .route("/api/images", axum::routing::get(api::images::list_images))
         .route("/api/images/import", axum::routing::post(api::images::import_images))
+        .route("/api/images/correlate", axum::routing::post(api::images::correlate_image))
+        .route("/api/images/file/{filename}", axum::routing::get(serve_image))
         // State & middleware
         .with_state(shared_state)
         .layer(cors)
